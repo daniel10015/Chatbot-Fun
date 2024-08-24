@@ -8,6 +8,8 @@
 #endif
 #include <iostream>
 #include <stdio.h>
+#include <set>
+#include <unordered_map>
 /* socket libraries */
 
 #define PORT     8080 
@@ -59,13 +61,33 @@ int main(void)
 
     // recieve data
     printf("Receiving datagrams on %s\n", ADDRESS);
+    std::unordered_map<ULONG, sockaddr_in> clients;
     // blocking function
-    bytesRecieved = recvfrom(serverSocket, serverBuf, bufferLength, 0, (SOCKADDR*)&senderAddr, &sendAddrSize);
-    if (bytesRecieved == SOCKET_ERROR)
+    while (true)
     {
-        printf("recvfrom failed with error %d\n", WSAGetLastError());
+        bytesRecieved = recvfrom(serverSocket, serverBuf, bufferLength, 0, (SOCKADDR*)&senderAddr, &sendAddrSize);
+        if (bytesRecieved == SOCKET_ERROR)
+        {
+            printf("recvfrom failed with error %d\n", WSAGetLastError());
+        }
+        else
+        {
+            clients[senderAddr.sin_addr.S_un.S_addr] = senderAddr;
+        }
+        serverBuf[bytesRecieved] = '\0';
+
+        std::cout << serverBuf << std::endl;
+        // relay message to clients (not including the one that sent it)
+        for (auto& client : clients)
+        {
+            std::cout << "client: " << client.first << std::endl;
+            if (client.first != senderAddr.sin_addr.S_un.S_addr)
+            {
+                std::cout << "sending to " << client.first << std::endl;
+                sendto(serverSocket, serverBuf, bytesRecieved + 1, 0, (SOCKADDR*)&client.second, sendAddrSize);
+            }
+        }
     }
-    serverBuf[bytesRecieved] = '\0';
 
     char sendBuf[] = { 'h', 'e', 'l', 'l', 'o', '\0' };
     int sendBufLen = (int)(sizeof(sendBuf) - 1);

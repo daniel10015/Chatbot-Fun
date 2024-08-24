@@ -1,4 +1,6 @@
 #ifdef _WIN32
+//#include <Windows.h>
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #  include <WinSock2.h>
 #  include <Ws2tcpip.h>
@@ -8,14 +10,64 @@
 #endif
 #include <iostream>
 #include <stdio.h>
+#include <threads.h>
 /* socket libraries */
+
+#include <string>
+#include <mutex>
 
 #define PORT     8080 
 #define ADDRESS  "127.0.0.1"
 #define MAXLINE  1024 
 
+std::mutex newMessageMutex;
+bool newMessage = false;
+
+
+
+void GetUserMessage(std::string& input)
+{
+    std::getline(std::cin, input);
+    std::cout << "more debug " << input << std::endl;
+}
+
+void HandleUserInput(std::string& userInput)
+{
+    std::string temp;
+    while (true)
+    {
+        GetUserMessage(temp);
+        newMessageMutex.lock();
+        userInput = temp;
+        newMessage = true;
+        newMessageMutex.unlock();
+    }
+}
+
+void ListenForServer(SOCKET sock, sockaddr* from, int addrLength)
+{
+    char serverBuf[1025];
+    int bufferLength = 1024;
+    while (true)
+    {
+        int bytesRecieved = recvfrom(sock, serverBuf, bufferLength, 0, from, &addrLength);
+        if (bytesRecieved == SOCKET_ERROR)
+        {
+            printf("recvfrom failed with error %d\n", WSAGetLastError());
+        }
+        serverBuf[bytesRecieved] = '\0';
+        std::cout << serverBuf << std::endl;
+    }
+}
+
 int main(void)
 {
+    std::string username;
+    std::cout << "input username: ";
+    GetUserMessage(username);
+
+
+
     // initialize winsock
     WSADATA wsaData;
     int res = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -36,20 +88,53 @@ int main(void)
     // setup send info
     char SendBuf[1025];
     int BufLen = (int)(sizeof(SendBuf) - 1);
-    const char* toSend = "foobar";
-    strcpy_s(SendBuf, toSend);
+    std::string toSend = username + " connected!";
+    strcpy_s(SendBuf, toSend.c_str());
 
-    struct sockaddr_in clientAddr;
+    struct sockaddr_in serverAddr;
     int clientAddrSize = sizeof(sockaddr_in);
 
-    clientAddr.sin_port = htons(PORT);
-    clientAddr.sin_addr.s_addr = inet_addr(ADDRESS);
-    clientAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = inet_addr(ADDRESS);
+    serverAddr.sin_family = AF_INET;
 
     puts("Sending a datagram to the receiver...");
     int clientResult = sendto(sendSocket,
-        SendBuf, BufLen, 0, (SOCKADDR*)&clientAddr, clientAddrSize);
+        SendBuf, BufLen, 0, (SOCKADDR*)&serverAddr, clientAddrSize);
 
+    std::string userMessage;
+    std::thread userInputThread(HandleUserInput, std::ref(userMessage));
+    userInputThread.detach();
+    std::thread serverListenThread(ListenForServer, sendSocket, (SOCKADDR*)&serverAddr, clientAddrSize);
+    serverListenThread.detach();
+
+    std::string sendMessage;
+
+    // while most significant bit isn't set, keep running
+    // ESC to leave loop
+    GetAsyncKeyState(VK_ESCAPE);
+    while (~GetAsyncKeyState(VK_ESCAPE)&0x8000)
+    {
+        // check for user input, if so then send
+        newMessageMutex.lock();
+        if (newMessage)
+        {
+            newMessage = false;
+            std::cout << "DEBUG: " << userMessage << std::endl;
+            // could make this faster with pointers but lazy rn
+            sendMessage = "[" + username + "]: " + userMessage;
+            sendto(sendSocket,
+                sendMessage.c_str(), sendMessage.size(), 0, (SOCKADDR*)&serverAddr, clientAddrSize);
+            userMessage.clear();
+        }
+        newMessageMutex.unlock();
+
+        Sleep(10); // sleep for 10 ms
+    }
+    sendMessage = username + " disconnected!";
+    sendto(sendSocket,
+        sendMessage.c_str(), sendMessage.size(), 0, (SOCKADDR*)&serverAddr, clientAddrSize);
+    std::cout << "Session ended for " << username << std::endl;
 
     return 0;
 }
