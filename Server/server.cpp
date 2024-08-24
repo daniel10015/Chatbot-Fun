@@ -16,6 +16,40 @@
 #define ADDRESS  "127.0.0.1"
 #define MAXLINE  1024 
 
+const std::string connected = "connected!";
+const std::string disconnected = "disconnected!";
+
+boolean IsNewClient(const std::string& input)
+{
+    if (input.size() > connected.size())
+    {
+        //std::cout << "DEBUG: " << input.substr(input.size() - 1 - connected.size()) << std::endl;
+        if (input.substr(input.size() - connected.size(), connected.size()) == connected)
+            return true;
+    }
+    return false;
+}
+
+void GetName(std::string& extracted, const std::string& input)
+{
+    size_t i = 1;
+    while (input[i] != ']') { i++; }
+    extracted = input.substr(1, i-1);
+}
+
+boolean IsDisconnectedClient(const std::string& input)
+{
+    if (input.size() > disconnected.size())
+    {
+        //std::cout << "DEBUG: " << input.substr(input.size() - disconnected.size()) << std::endl;
+        if (input.substr(input.size() - disconnected.size(), disconnected.size()) == disconnected)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 int main(void)
 {
     // initialize winsock
@@ -61,7 +95,9 @@ int main(void)
 
     // recieve data
     printf("Receiving datagrams on %s\n", ADDRESS);
-    std::unordered_map<ULONG, sockaddr_in> clients;
+    std::unordered_map<std::string, sockaddr_in> clients;
+    std::string serverInput;
+    std::string clientName;
     // blocking function
     while (true)
     {
@@ -72,19 +108,30 @@ int main(void)
         }
         else
         {
-            clients[senderAddr.sin_addr.S_un.S_addr] = senderAddr;
+            serverBuf[bytesRecieved] = '\0';
+            serverInput = serverBuf;
+            GetName(clientName, serverInput);
+            if (IsNewClient(serverInput))
+            {
+                clients[clientName] = senderAddr;
+            }
+            else if (IsDisconnectedClient(serverInput))
+            {
+                //std::cout << clientName << " disconnected from the server!\n";
+                clients.erase(clientName);
+            }
         }
-        serverBuf[bytesRecieved] = '\0';
 
         std::cout << serverBuf << std::endl;
         // relay message to clients (not including the one that sent it)
-        for (auto& client : clients)
+        //std::cout << "relaying message (" << clients.size() << ")... " << std::endl;
+        for (const auto& client : clients)
         {
-            std::cout << "client: " << client.first << std::endl;
-            if (client.first != senderAddr.sin_addr.S_un.S_addr)
+            //std::cout << "client: " << client.first << std::endl;
+            if (client.first != clientName)
             {
-                std::cout << "sending to " << client.first << std::endl;
-                sendto(serverSocket, serverBuf, bytesRecieved + 1, 0, (SOCKADDR*)&client.second, sendAddrSize);
+                //std::cout << "sending to " << client.first << std::endl;
+                sendto(serverSocket, serverBuf, bytesRecieved, 0, (SOCKADDR*)&(client.second), sendAddrSize);
             }
         }
     }

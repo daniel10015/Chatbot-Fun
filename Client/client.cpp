@@ -28,7 +28,6 @@ bool newMessage = false;
 void GetUserMessage(std::string& input)
 {
     std::getline(std::cin, input);
-    std::cout << "more debug " << input << std::endl;
 }
 
 void HandleUserInput(std::string& userInput)
@@ -88,7 +87,7 @@ int main(void)
     // setup send info
     char SendBuf[1025];
     int BufLen = (int)(sizeof(SendBuf) - 1);
-    std::string toSend = username + " connected!";
+    std::string toSend = "[" + username + "] connected!";
     strcpy_s(SendBuf, toSend.c_str());
 
     struct sockaddr_in serverAddr;
@@ -120,9 +119,9 @@ int main(void)
         if (newMessage)
         {
             newMessage = false;
-            std::cout << "DEBUG: " << userMessage << std::endl;
+            //std::cout << "DEBUG: " << userMessage << std::endl;
             // could make this faster with pointers but lazy rn
-            sendMessage = "[" + username + "]: " + userMessage;
+            sendMessage = "[" + username + "] " + userMessage;
             sendto(sendSocket,
                 sendMessage.c_str(), sendMessage.size(), 0, (SOCKADDR*)&serverAddr, clientAddrSize);
             userMessage.clear();
@@ -131,7 +130,7 @@ int main(void)
 
         Sleep(10); // sleep for 10 ms
     }
-    sendMessage = username + " disconnected!";
+    sendMessage = "[" + username + "] disconnected!";
     sendto(sendSocket,
         sendMessage.c_str(), sendMessage.size(), 0, (SOCKADDR*)&serverAddr, clientAddrSize);
     std::cout << "Session ended for " << username << std::endl;
