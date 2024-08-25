@@ -1,3 +1,4 @@
+
 #ifdef _WIN32
 //#include <Windows.h>
 
@@ -11,6 +12,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <threads.h>
+#include <fstream>
 /* socket libraries */
 
 #include <string>
@@ -22,6 +24,7 @@
 
 std::mutex newMessageMutex;
 bool newMessage = false;
+std::string username; // read-only
 
 
 
@@ -55,13 +58,17 @@ void ListenForServer(SOCKET sock, sockaddr* from, int addrLength)
             printf("recvfrom failed with error %d\n", WSAGetLastError());
         }
         serverBuf[bytesRecieved] = '\0';
-        std::cout << serverBuf << std::endl;
+        
+        // write to chat logs for the user:
+        std::ofstream outfile;
+        outfile.open(username + "_chat_logs.txt", std::ios_base::app); // append instead of overwrite
+        outfile << serverBuf << "\n";
+        outfile.close();
     }
 }
 
 int main(void)
 {
-    std::string username;
     std::cout << "input username: ";
     GetUserMessage(username);
 
@@ -111,8 +118,8 @@ int main(void)
 
     // while most significant bit isn't set, keep running
     // ESC to leave loop
-    GetAsyncKeyState(VK_ESCAPE);
-    while (~GetAsyncKeyState(VK_ESCAPE)&0x8000)
+    GetKeyState(VK_ESCAPE);
+    while (~GetKeyState(VK_ESCAPE) & 0x8000)
     {
         // check for user input, if so then send
         newMessageMutex.lock();

@@ -122,17 +122,13 @@ int main(void)
             }
         }
 
+        //print out input message
         std::cout << serverBuf << std::endl;
-        // relay message to clients (not including the one that sent it)
-        //std::cout << "relaying message (" << clients.size() << ")... " << std::endl;
+
+        // relay message to all clients (including the one that sent it, unless they disconnected)
         for (const auto& client : clients)
         {
-            //std::cout << "client: " << client.first << std::endl;
-            if (client.first != clientName)
-            {
-                //std::cout << "sending to " << client.first << std::endl;
-                sendto(serverSocket, serverBuf, bytesRecieved, 0, (SOCKADDR*)&(client.second), sendAddrSize);
-            }
+               sendto(serverSocket, serverBuf, bytesRecieved, 0, (SOCKADDR*)&(client.second), sendAddrSize);
         }
     }
 
