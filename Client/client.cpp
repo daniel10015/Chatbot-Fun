@@ -26,6 +26,8 @@ std::mutex newMessageMutex;
 bool newMessage = false;
 std::string username; // read-only
 
+std::string unique_identifier;
+
 
 
 void GetUserMessage(std::string& input)
@@ -61,7 +63,7 @@ void ListenForServer(SOCKET sock, sockaddr* from, int addrLength)
         
         // write to chat logs for the user:
         std::ofstream outfile;
-        outfile.open(username + "_chat_logs.txt", std::ios_base::app); // append instead of overwrite
+        outfile.open(unique_identifier + "_" + username + "_chat_logs.txt", std::ios_base::app); // append instead of overwrite
         outfile << serverBuf << "\n";
         outfile.close();
     }
@@ -107,6 +109,10 @@ int main(void)
     puts("Sending a datagram to the receiver...");
     int clientResult = sendto(sendSocket,
         SendBuf, BufLen, 0, (SOCKADDR*)&serverAddr, clientAddrSize);
+    // get unique identifier
+    clientResult = recvfrom(sendSocket, SendBuf, BufLen, 0, (SOCKADDR*)&serverAddr, &clientAddrSize);
+    SendBuf[clientResult] = '\0';
+    unique_identifier = SendBuf;
 
     std::string userMessage;
     std::thread userInputThread(HandleUserInput, std::ref(userMessage));
@@ -128,7 +134,7 @@ int main(void)
             newMessage = false;
             //std::cout << "DEBUG: " << userMessage << std::endl;
             // could make this faster with pointers but lazy rn
-            sendMessage = "[" + username + "] " + userMessage;
+            sendMessage = unique_identifier + "[" + username + "] " + userMessage;
             sendto(sendSocket,
                 sendMessage.c_str(), sendMessage.size(), 0, (SOCKADDR*)&serverAddr, clientAddrSize);
             userMessage.clear();
@@ -137,7 +143,7 @@ int main(void)
 
         Sleep(10); // sleep for 10 ms
     }
-    sendMessage = "[" + username + "] disconnected!";
+    sendMessage = unique_identifier + "[" + username + "] disconnected!";
     sendto(sendSocket,
         sendMessage.c_str(), sendMessage.size(), 0, (SOCKADDR*)&serverAddr, clientAddrSize);
     std::cout << "Session ended for " << username << std::endl;

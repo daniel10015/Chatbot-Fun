@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <set>
 #include <unordered_map>
+#include <string>
 /* socket libraries */
 
 #define PORT     8080 
@@ -18,6 +19,8 @@
 
 const std::string connected = "connected!";
 const std::string disconnected = "disconnected!";
+
+unsigned long currentIdentifier = 0;
 
 boolean IsNewClient(const std::string& input)
 {
@@ -48,6 +51,14 @@ boolean IsDisconnectedClient(const std::string& input)
         }
     }
     return false;
+}
+
+// pair{ unique_ID, idx to start of msg }
+std::pair<unsigned long, unsigned long> GetStartOfMessage(const std::string& input)
+{
+    unsigned long i = 1;
+    while (input[i] != '[') { i++; }
+    return { std::stoul(input.substr(0, i)), i };
 }
 
 int main(void)
@@ -95,9 +106,10 @@ int main(void)
 
     // recieve data
     printf("Receiving datagrams on %s\n", ADDRESS);
-    std::unordered_map<std::string, sockaddr_in> clients;
+    std::unordered_map<unsigned long, sockaddr_in> clients;
     std::string serverInput;
     std::string clientName;
+    size_t clientID;
     // blocking function
     while (true)
     {
@@ -110,19 +122,25 @@ int main(void)
         {
             serverBuf[bytesRecieved] = '\0';
             serverInput = serverBuf;
-            GetName(clientName, serverInput);
             if (IsNewClient(serverInput))
             {
-                clients[clientName] = senderAddr;
+                // generate unique identifier
+                clientID = currentIdentifier++;
+                // send unqiue identifier to client
+                std::string ID = std::to_string(clientID);
+                sendto(serverSocket, ID.c_str(), ID.size(), 0, (SOCKADDR*)&senderAddr, sendAddrSize);
+                // store client info
+                clients[clientID] = senderAddr;
             }
             else if (IsDisconnectedClient(serverInput))
             {
-                //std::cout << clientName << " disconnected from the server!\n";
-                clients.erase(clientName);
+                std::pair<unsigned long, unsigned long> ret = GetStartOfMessage(serverInput);
+                clients.erase(ret.first);
+                serverInput = serverInput.substr(ret.second, serverInput.size() - ret.second); // update msg
             }
         }
 
-        //print out input message
+        //print out entire input message
         std::cout << serverBuf << std::endl;
 
         // relay message to all clients (including the one that sent it, unless they disconnected)
